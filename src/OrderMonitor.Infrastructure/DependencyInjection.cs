@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OrderMonitor.Core.Interfaces;
+using OrderMonitor.Core.Services;
 using OrderMonitor.Infrastructure.Data;
 
 namespace OrderMonitor.Infrastructure;
@@ -25,6 +26,9 @@ public static class DependencyInjection
 
         // Register repositories
         services.AddScoped<IOrderRepository, OrderRepository>();
+
+        // Register services
+        services.AddScoped<IStuckOrderService, StuckOrderService>();
 
         return services;
     }
