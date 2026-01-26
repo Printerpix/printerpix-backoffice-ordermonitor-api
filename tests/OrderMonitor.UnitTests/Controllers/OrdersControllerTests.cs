@@ -211,4 +211,168 @@ public class OrdersControllerTests
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("logger");
     }
+
+    #region GetOrderStatusHistory Tests
+
+    [Fact]
+    public async Task GetOrderStatusHistory_ReturnsOkResult_WithHistory()
+    {
+        // Arrange
+        var orderId = "CO12345";
+        var expectedResponse = new OrderStatusHistoryResponse
+        {
+            OrderId = orderId,
+            History = new List<OrderStatusHistoryDto>
+            {
+                new() { StatusId = 3001, Status = "Initialized_New", Timestamp = DateTime.UtcNow.AddHours(-48), Duration = "24h", IsStuck = false },
+                new() { StatusId = 3060, Status = "PreparationDone", Timestamp = DateTime.UtcNow.AddHours(-24), Duration = "24h+ (STUCK)", IsStuck = true }
+            }
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetOrderStatusHistoryAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.GetOrderStatusHistory(orderId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = okResult.Value.Should().BeOfType<OrderStatusHistoryResponse>().Subject;
+        response.OrderId.Should().Be(orderId);
+        response.History.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusHistory_WithValidOrderId_CallsServiceWithCorrectId()
+    {
+        // Arrange
+        var orderId = "CO99999";
+        string? capturedOrderId = null;
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetOrderStatusHistoryAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, CancellationToken>((id, _) => capturedOrderId = id)
+            .ReturnsAsync(new OrderStatusHistoryResponse { OrderId = orderId, History = [] });
+
+        // Act
+        await _controller.GetOrderStatusHistory(orderId);
+
+        // Assert
+        capturedOrderId.Should().Be(orderId);
+    }
+
+    [Fact]
+    public async Task GetOrderStatusHistory_WithEmptyHistory_ReturnsEmptyList()
+    {
+        // Arrange
+        var orderId = "CO00001";
+        var expectedResponse = new OrderStatusHistoryResponse
+        {
+            OrderId = orderId,
+            History = []
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetOrderStatusHistoryAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.GetOrderStatusHistory(orderId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = okResult.Value.Should().BeOfType<OrderStatusHistoryResponse>().Subject;
+        response.History.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetOrderStatusHistory_WhenServiceThrows_Returns500()
+    {
+        // Arrange
+        var orderId = "CO12345";
+        _stuckOrderServiceMock
+            .Setup(s => s.GetOrderStatusHistoryAsync(orderId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.GetOrderStatusHistory(orderId);
+
+        // Assert
+        result.Result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(500);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public async Task GetOrderStatusHistory_WithInvalidOrderId_ReturnsBadRequest(string? orderId)
+    {
+        // Act
+        var result = await _controller.GetOrderStatusHistory(orderId!);
+
+        // Assert
+        result.Result.Should().BeOfType<BadRequestObjectResult>();
+    }
+
+    [Fact]
+    public async Task GetOrderStatusHistory_HistoryIncludesDuration_ForEachStatusChange()
+    {
+        // Arrange
+        var orderId = "CO12345";
+        var expectedResponse = new OrderStatusHistoryResponse
+        {
+            OrderId = orderId,
+            History = new List<OrderStatusHistoryDto>
+            {
+                new() { StatusId = 3001, Status = "Initialized_New", Timestamp = DateTime.UtcNow.AddHours(-72), Duration = "2h 30m", IsStuck = false },
+                new() { StatusId = 3020, Status = "AwaitingAssets", Timestamp = DateTime.UtcNow.AddHours(-69).AddMinutes(-30), Duration = "45h 30m", IsStuck = false },
+                new() { StatusId = 3060, Status = "PreparationDone", Timestamp = DateTime.UtcNow.AddHours(-24), Duration = "24h+ (STUCK)", IsStuck = true }
+            }
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetOrderStatusHistoryAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.GetOrderStatusHistory(orderId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = okResult.Value.Should().BeOfType<OrderStatusHistoryResponse>().Subject;
+        response.History.Should().AllSatisfy(h => h.Duration.Should().NotBeNullOrEmpty());
+    }
+
+    [Fact]
+    public async Task GetOrderStatusHistory_FlagsCurrentStatusAsStuck_WhenExceedsThreshold()
+    {
+        // Arrange
+        var orderId = "CO12345";
+        var expectedResponse = new OrderStatusHistoryResponse
+        {
+            OrderId = orderId,
+            History = new List<OrderStatusHistoryDto>
+            {
+                new() { StatusId = 3001, Status = "Initialized_New", Timestamp = DateTime.UtcNow.AddHours(-24), Duration = "12h", IsStuck = false },
+                new() { StatusId = 3060, Status = "PreparationDone", Timestamp = DateTime.UtcNow.AddHours(-12), Duration = "12h+ (STUCK)", IsStuck = true }
+            }
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetOrderStatusHistoryAsync(orderId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedResponse);
+
+        // Act
+        var result = await _controller.GetOrderStatusHistory(orderId);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = okResult.Value.Should().BeOfType<OrderStatusHistoryResponse>().Subject;
+        var lastStatus = response.History.Last();
+        lastStatus.IsStuck.Should().BeTrue();
+    }
+
+    #endregion
 }

@@ -74,4 +74,46 @@ public class OrdersController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An error occurred while retrieving stuck orders" });
         }
     }
+
+    /// <summary>
+    /// Gets the status history for a specific order.
+    /// </summary>
+    /// <param name="orderId">The order ID (e.g., CO12345)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Order status history with duration and stuck flag</returns>
+    /// <response code="200">Returns the order status history</response>
+    /// <response code="400">If the order ID is invalid</response>
+    /// <response code="500">If an internal error occurs</response>
+    [HttpGet("{orderId}/status-history")]
+    [ProducesResponseType(typeof(OrderStatusHistoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<OrderStatusHistoryResponse>> GetOrderStatusHistory(
+        string orderId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+        {
+            return BadRequest(new { error = "Order ID is required" });
+        }
+
+        try
+        {
+            _logger.LogInformation("Getting status history for order {OrderId}", orderId);
+
+            var response = await _stuckOrderService.GetOrderStatusHistoryAsync(orderId, cancellationToken);
+
+            _logger.LogInformation(
+                "Found {Count} status history entries for order {OrderId}",
+                response.History.Count(),
+                orderId);
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting status history for order {OrderId}", orderId);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An error occurred while retrieving order status history" });
+        }
+    }
 }
