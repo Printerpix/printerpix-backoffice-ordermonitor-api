@@ -116,4 +116,38 @@ public class OrdersController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An error occurred while retrieving order status history" });
         }
     }
+
+    /// <summary>
+    /// Gets summary statistics for stuck orders.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Summary statistics including counts by threshold and category</returns>
+    /// <response code="200">Returns the stuck orders summary</response>
+    /// <response code="500">If an internal error occurs</response>
+    [HttpGet("stuck/summary")]
+    [ProducesResponseType(typeof(StuckOrdersSummary), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<StuckOrdersSummary>> GetStuckOrdersSummary(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Getting stuck orders summary");
+
+            var summary = await _stuckOrderService.GetStuckOrdersSummaryAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Stuck orders summary: Total={Total}, PrepStatuses={PrepCount}, FacilityStatuses={FacilityCount}",
+                summary.TotalStuckOrders,
+                summary.ByThreshold.GetValueOrDefault("PrepStatuses (6h)", 0),
+                summary.ByThreshold.GetValueOrDefault("FacilityStatuses (48h)", 0));
+
+            return Ok(summary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting stuck orders summary");
+            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "An error occurred while retrieving stuck orders summary" });
+        }
+    }
 }

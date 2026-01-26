@@ -375,4 +375,221 @@ public class OrdersControllerTests
     }
 
     #endregion
+
+    #region GetStuckOrdersSummary Tests
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_ReturnsOkResult_WithSummary()
+    {
+        // Arrange
+        var expectedSummary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 150,
+            ByThreshold = new Dictionary<string, int>
+            {
+                ["PrepStatuses (6h)"] = 100,
+                ["FacilityStatuses (48h)"] = 50
+            },
+            ByStatusCategory = new Dictionary<string, int>
+            {
+                ["Preparation"] = 80,
+                ["PrintBoxAlert"] = 20,
+                ["Facility"] = 40,
+                ["Shipping"] = 10
+            },
+            TopStatuses = new List<StatusCount>
+            {
+                new() { StatusId = 3060, Status = "PreparationDone", Count = 45 },
+                new() { StatusId = 4800, Status = "ErrorInFacility", Count = 30 },
+                new() { StatusId = 3720, Status = "PrintBoxAlert_RenderStatusFailure", Count = 15 }
+            },
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSummary);
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var summary = okResult.Value.Should().BeOfType<StuckOrdersSummary>().Subject;
+        summary.TotalStuckOrders.Should().Be(150);
+    }
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_ReturnsByThresholdCounts()
+    {
+        // Arrange
+        var expectedSummary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 100,
+            ByThreshold = new Dictionary<string, int>
+            {
+                ["PrepStatuses (6h)"] = 60,
+                ["FacilityStatuses (48h)"] = 40
+            },
+            ByStatusCategory = new Dictionary<string, int>(),
+            TopStatuses = [],
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSummary);
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var summary = okResult.Value.Should().BeOfType<StuckOrdersSummary>().Subject;
+        summary.ByThreshold.Should().ContainKey("PrepStatuses (6h)");
+        summary.ByThreshold.Should().ContainKey("FacilityStatuses (48h)");
+        summary.ByThreshold["PrepStatuses (6h)"].Should().Be(60);
+        summary.ByThreshold["FacilityStatuses (48h)"].Should().Be(40);
+    }
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_ReturnsByStatusCategoryCounts()
+    {
+        // Arrange
+        var expectedSummary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 100,
+            ByThreshold = new Dictionary<string, int>(),
+            ByStatusCategory = new Dictionary<string, int>
+            {
+                ["Preparation"] = 50,
+                ["PrintBoxAlert"] = 20,
+                ["Facility"] = 30
+            },
+            TopStatuses = [],
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSummary);
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var summary = okResult.Value.Should().BeOfType<StuckOrdersSummary>().Subject;
+        summary.ByStatusCategory.Should().HaveCount(3);
+        summary.ByStatusCategory["Preparation"].Should().Be(50);
+    }
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_ReturnsTopStatuses()
+    {
+        // Arrange
+        var expectedSummary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 100,
+            ByThreshold = new Dictionary<string, int>(),
+            ByStatusCategory = new Dictionary<string, int>(),
+            TopStatuses = new List<StatusCount>
+            {
+                new() { StatusId = 3060, Status = "PreparationDone", Count = 45 },
+                new() { StatusId = 4800, Status = "ErrorInFacility", Count = 30 },
+                new() { StatusId = 3720, Status = "PrintBoxAlert_RenderStatusFailure", Count = 15 }
+            },
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSummary);
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var summary = okResult.Value.Should().BeOfType<StuckOrdersSummary>().Subject;
+        summary.TopStatuses.Should().HaveCount(3);
+        summary.TopStatuses.First().Status.Should().Be("PreparationDone");
+        summary.TopStatuses.First().Count.Should().Be(45);
+    }
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_WhenNoStuckOrders_ReturnsZeroCounts()
+    {
+        // Arrange
+        var expectedSummary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 0,
+            ByThreshold = new Dictionary<string, int>
+            {
+                ["PrepStatuses (6h)"] = 0,
+                ["FacilityStatuses (48h)"] = 0
+            },
+            ByStatusCategory = new Dictionary<string, int>(),
+            TopStatuses = [],
+            GeneratedAt = DateTime.UtcNow
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSummary);
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var summary = okResult.Value.Should().BeOfType<StuckOrdersSummary>().Subject;
+        summary.TotalStuckOrders.Should().Be(0);
+        summary.TopStatuses.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_WhenServiceThrows_Returns500()
+    {
+        // Arrange
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Database error"));
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        result.Result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(500);
+    }
+
+    [Fact]
+    public async Task GetStuckOrdersSummary_IncludesGeneratedAtTimestamp()
+    {
+        // Arrange
+        var generatedAt = DateTime.UtcNow;
+        var expectedSummary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 10,
+            ByThreshold = new Dictionary<string, int>(),
+            ByStatusCategory = new Dictionary<string, int>(),
+            TopStatuses = [],
+            GeneratedAt = generatedAt
+        };
+
+        _stuckOrderServiceMock
+            .Setup(s => s.GetStuckOrdersSummaryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSummary);
+
+        // Act
+        var result = await _controller.GetStuckOrdersSummary();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var summary = okResult.Value.Should().BeOfType<StuckOrdersSummary>().Subject;
+        summary.GeneratedAt.Should().BeCloseTo(generatedAt, TimeSpan.FromSeconds(1));
+    }
+
+    #endregion
 }
