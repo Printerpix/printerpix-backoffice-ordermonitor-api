@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OrderMonitor.Core.Configuration;
 using OrderMonitor.Core.Interfaces;
 using OrderMonitor.Core.Services;
 using OrderMonitor.Infrastructure.Data;
+using OrderMonitor.Infrastructure.Services;
 
 namespace OrderMonitor.Infrastructure;
 
@@ -29,6 +31,13 @@ public static class DependencyInjection
 
         // Register services
         services.AddScoped<IStuckOrderService, StuckOrderService>();
+        services.AddScoped<IAlertService, AlertService>();
+
+        // Register scanner settings
+        services.Configure<ScannerSettings>(configuration.GetSection(ScannerSettings.SectionName));
+
+        // Register background scanner as hosted service
+        services.AddHostedService<BackgroundScannerService>();
 
         return services;
     }
