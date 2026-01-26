@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Release
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Tests
+        run: dotnet test --configuration Release --no-build
+
+      - name: Publish Application
+        run: |
+          dotnet publish src/OrderMonitor.Api/OrderMonitor.Api.csproj \
+            --configuration Release \
+            --output ./publish \
+            --no-build
+
+      - name: Create Release Archive
+        run: |
+          cd publish
+          zip -r ../OrderMonitor.Api-${{ github.ref_name }}.zip .
+
+      - name: Generate Changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v4
+        with:
+          configuration: |
+            {
+              "categories": [
+                {
+                  "title": "## Features",
+                  "labels": ["feature", "enhancement"]
+                },
+                {
+                  "title": "## Bug Fixes",
+                  "labels": ["bug", "fix"]
+                },
+                {
+                  "title": "## Documentation",
+                  "labels": ["documentation"]
+                },
+                {
+                  "title": "## Other Changes",
+                  "labels": []
+                }
+              ]
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: |
+            OrderMonitor.Api-${{ github.ref_name }}.zip
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
