@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using OrderMonitor.Core.Configuration;
 using OrderMonitor.Core.Interfaces;
 using OrderMonitor.Core.Models;
+using OrderMonitor.Infrastructure.Security;
 
 namespace OrderMonitor.Infrastructure.Services;
 
@@ -164,14 +165,17 @@ public class AlertService : IAlertService
         IEnumerable<string> recipients,
         CancellationToken cancellationToken)
     {
-        // Get password from environment variable if not set in config
-        var password = _smtpSettings.Password ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
+        // Get password from config or environment variable, decrypt if encrypted
+        var encryptedPassword = _smtpSettings.Password ?? Environment.GetEnvironmentVariable("SMTP_PASSWORD");
 
-        if (string.IsNullOrEmpty(password))
+        if (string.IsNullOrEmpty(encryptedPassword))
         {
             _logger.LogError("SMTP password not configured. Set SMTP_PASSWORD environment variable or SmtpSettings:Password in config.");
             throw new InvalidOperationException("SMTP password not configured");
         }
+
+        // Decrypt password (if it's encrypted, otherwise returns as-is)
+        var password = PasswordEncryptor.Decrypt(encryptedPassword);
 
         using var client = new SmtpClient(_smtpSettings.Host, _smtpSettings.Port)
         {
