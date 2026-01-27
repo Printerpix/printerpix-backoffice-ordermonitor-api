@@ -7,6 +7,7 @@ namespace OrderMonitor.Infrastructure.Data;
 
 /// <summary>
 /// Repository implementation for order data access using Dapper.
+/// Queries ConsolidationOrder and OrderProductTracking tables.
 /// </summary>
 public class OrderRepository : IOrderRepository
 {
@@ -24,29 +25,38 @@ public class OrderRepository : IOrderRepository
     {
         const string baseSql = @"
             SELECT
-                o.CONumber AS OrderId,
-                o.OrderNumber,
-                o.StatusId,
-                s.StatusName AS Status,
-                o.ProductType,
-                o.StatusUpdatedAt AS StuckSince,
-                DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) AS HoursStuck,
+                co.CONumber AS OrderId,
+                co.orderNumber AS OrderNumber,
+                opt.Status AS StatusId,
+                st.Tracking_Status_Name AS Status,
+                mt.MajorProductTypeName AS ProductType,
+                opt.lastUpdatedDate AS StuckSince,
+                DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) AS HoursStuck,
                 CASE
-                    WHEN o.StatusId BETWEEN 3001 AND 3910 THEN 6
-                    WHEN o.StatusId BETWEEN 4001 AND 5830 THEN 48
+                    WHEN opt.Status BETWEEN 3001 AND 3910 THEN 6
+                    WHEN opt.Status BETWEEN 4001 AND 5830 THEN 48
                     ELSE 24
                 END AS ThresholdHours,
-                o.Region,
-                o.CustomerEmail
-            FROM Orders o
-            INNER JOIN OrderStatuses s ON o.StatusId = s.StatusId
-            WHERE
-                (
-                    (o.StatusId BETWEEN 3001 AND 3910
-                     AND DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) > 6)
+                co.websiteCode AS Region,
+                NULL AS CustomerEmail
+            FROM ConsolidationOrder co (NOLOCK)
+            INNER JOIN OrderProductTracking opt (NOLOCK)
+                ON opt.CONumber = co.CONumber
+            INNER JOIN luk_Tracking_Status st (NOLOCK)
+                ON st.Tracking_Status_id = opt.Status
+            INNER JOIN mas_SnSpecification sn (NOLOCK)
+                ON sn.SnID = opt.OPT_SnSpId
+            INNER JOIN luk_MajorProductType mt (NOLOCK)
+                ON mt.MProductTypeID = sn.MasterProductTypeID
+            WHERE opt.isPrimaryComponent = 1
+                AND opt.OrderDate > DATEADD(YEAR, -2, GETUTCDATE())
+                AND opt.Status < 6400
+                AND (
+                    (opt.Status BETWEEN 3001 AND 3910
+                     AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 6)
                     OR
-                    (o.StatusId BETWEEN 4001 AND 5830
-                     AND DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) > 48)
+                    (opt.Status BETWEEN 4001 AND 5830
+                     AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 48)
                 )";
 
         var sqlBuilder = new StringBuilder(baseSql);
@@ -55,30 +65,30 @@ public class OrderRepository : IOrderRepository
         // Apply optional filters
         if (queryParams.StatusId.HasValue)
         {
-            sqlBuilder.Append(" AND o.StatusId = @StatusId");
+            sqlBuilder.Append(" AND opt.Status = @StatusId");
             parameters.Add("StatusId", queryParams.StatusId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(queryParams.Status))
         {
-            sqlBuilder.Append(" AND s.StatusName LIKE @Status");
+            sqlBuilder.Append(" AND st.Tracking_Status_Name LIKE @Status");
             parameters.Add("Status", $"%{queryParams.Status}%");
         }
 
         if (queryParams.MinHours.HasValue)
         {
-            sqlBuilder.Append(" AND DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) >= @MinHours");
+            sqlBuilder.Append(" AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) >= @MinHours");
             parameters.Add("MinHours", queryParams.MinHours.Value);
         }
 
         if (queryParams.MaxHours.HasValue)
         {
-            sqlBuilder.Append(" AND DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) <= @MaxHours");
+            sqlBuilder.Append(" AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) <= @MaxHours");
             parameters.Add("MaxHours", queryParams.MaxHours.Value);
         }
 
         // Order by hours stuck descending (oldest first)
-        sqlBuilder.Append(" ORDER BY DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) DESC");
+        sqlBuilder.Append(" ORDER BY DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) DESC");
 
         // Apply pagination
         sqlBuilder.Append(" OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY");
@@ -95,14 +105,18 @@ public class OrderRepository : IOrderRepository
     {
         const string sql = @"
             SELECT COUNT(*)
-            FROM Orders o
-            WHERE
-                (
-                    (o.StatusId BETWEEN 3001 AND 3910
-                     AND DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) > 6)
+            FROM ConsolidationOrder co (NOLOCK)
+            INNER JOIN OrderProductTracking opt (NOLOCK)
+                ON opt.CONumber = co.CONumber
+            WHERE opt.isPrimaryComponent = 1
+                AND opt.OrderDate > DATEADD(YEAR, -2, GETUTCDATE())
+                AND opt.Status < 6400
+                AND (
+                    (opt.Status BETWEEN 3001 AND 3910
+                     AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 6)
                     OR
-                    (o.StatusId BETWEEN 4001 AND 5830
-                     AND DATEDIFF(HOUR, o.StatusUpdatedAt, GETUTCDATE()) > 48)
+                    (opt.Status BETWEEN 4001 AND 5830
+                     AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 48)
                 )";
 
         using var connection = _connectionFactory.CreateConnection();
@@ -118,13 +132,15 @@ public class OrderRepository : IOrderRepository
         const string sql = @"
             WITH StatusDurations AS (
                 SELECT
-                    sh.StatusId,
-                    s.StatusName AS Status,
-                    sh.Timestamp,
-                    LEAD(sh.Timestamp) OVER (ORDER BY sh.Timestamp) AS NextTimestamp
-                FROM OrderStatusHistory sh
-                INNER JOIN OrderStatuses s ON sh.StatusId = s.StatusId
-                WHERE sh.OrderId = @OrderId
+                    opt.Status AS StatusId,
+                    st.Tracking_Status_Name AS Status,
+                    opt.lastUpdatedDate AS Timestamp,
+                    LEAD(opt.lastUpdatedDate) OVER (ORDER BY opt.lastUpdatedDate) AS NextTimestamp
+                FROM OrderProductTracking opt (NOLOCK)
+                INNER JOIN luk_Tracking_Status st (NOLOCK)
+                    ON st.Tracking_Status_id = opt.Status
+                WHERE opt.CONumber = @OrderId
+                    AND opt.isPrimaryComponent = 1
             )
             SELECT
                 StatusId,
