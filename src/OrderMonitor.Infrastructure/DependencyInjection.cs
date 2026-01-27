@@ -4,6 +4,7 @@ using OrderMonitor.Core.Configuration;
 using OrderMonitor.Core.Interfaces;
 using OrderMonitor.Core.Services;
 using OrderMonitor.Infrastructure.Data;
+using OrderMonitor.Infrastructure.Security;
 using OrderMonitor.Infrastructure.Services;
 
 namespace OrderMonitor.Infrastructure;
@@ -23,6 +24,17 @@ public static class DependencyInjection
         // Register database connection factory
         var connectionString = configuration.GetConnectionString("BackofficeDb")
             ?? throw new InvalidOperationException("BackofficeDb connection string is not configured.");
+
+        // Check if password is encrypted (contains placeholder)
+        if (connectionString.Contains("{ENCRYPTED}"))
+        {
+            var encryptedPassword = configuration["DatabaseSettings:EncryptedPassword"];
+            if (!string.IsNullOrEmpty(encryptedPassword))
+            {
+                var decryptedPassword = PasswordEncryptor.Decrypt(encryptedPassword);
+                connectionString = connectionString.Replace("{ENCRYPTED}", decryptedPassword);
+            }
+        }
 
         services.AddSingleton<IDbConnectionFactory>(sp => new SqlConnectionFactory(connectionString));
 
