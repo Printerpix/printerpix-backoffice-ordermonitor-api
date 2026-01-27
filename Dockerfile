@@ -2,24 +2,20 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copy solution and project files
-COPY OrderMonitor.sln .
+# Copy project files for restore
 COPY nuget.config .
-COPY src/OrderMonitor.Api/OrderMonitor.Api.csproj src/OrderMonitor.Api/
 COPY src/OrderMonitor.Core/OrderMonitor.Core.csproj src/OrderMonitor.Core/
 COPY src/OrderMonitor.Infrastructure/OrderMonitor.Infrastructure.csproj src/OrderMonitor.Infrastructure/
+COPY src/OrderMonitor.Api/OrderMonitor.Api.csproj src/OrderMonitor.Api/
 
-# Restore dependencies (API project only, not test projects)
+# Restore dependencies
 RUN dotnet restore src/OrderMonitor.Api/OrderMonitor.Api.csproj
 
 # Copy source code
 COPY src/ src/
 
-# Build API project only
-RUN dotnet build src/OrderMonitor.Api/OrderMonitor.Api.csproj -c Release --no-restore
-
-# Publish
-RUN dotnet publish src/OrderMonitor.Api/OrderMonitor.Api.csproj -c Release -o /app/publish --no-build
+# Publish (combines build + publish in one step)
+RUN dotnet publish src/OrderMonitor.Api/OrderMonitor.Api.csproj -c Release -o /app/publish
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
@@ -37,7 +33,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Run
 ENTRYPOINT ["dotnet", "OrderMonitor.Api.dll"]

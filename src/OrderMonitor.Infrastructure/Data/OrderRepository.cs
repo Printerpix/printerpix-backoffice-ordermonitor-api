@@ -40,8 +40,8 @@ public class OrderRepository : IOrderRepository
                     END AS ThresholdHours,
                     co.websiteCode AS Region,
                     NULL AS CustomerEmail,
-                    CAST(ISNULL(opt.FacilityId, 0) AS VARCHAR(20)) AS FacilityCode,
-                    'Facility ' + CAST(ISNULL(opt.FacilityId, 0) AS VARCHAR(10)) AS FacilityName,
+                    CAST(ISNULL(opt.TPartnerCode, '') AS VARCHAR(20)) AS FacilityCode,
+                    ISNULL(pm.PartnerDisplayName, 'Unknown') AS FacilityName,
                     ROW_NUMBER() OVER (PARTITION BY co.CONumber ORDER BY opt.lastUpdatedDate DESC) AS RowNum
                 FROM ConsolidationOrder co (NOLOCK)
                 INNER JOIN OrderProductTracking opt (NOLOCK)
@@ -52,6 +52,8 @@ public class OrderRepository : IOrderRepository
                     ON sn.SnID = opt.OPT_SnSpId
                 INNER JOIN luk_MajorProductType mt (NOLOCK)
                     ON mt.MProductTypeID = sn.MasterProductTypeID
+                LEFT JOIN Partner_Master pm (NOLOCK)
+                    ON pm.PartnerID = opt.TPartnerCode AND pm.IsActive = 1
                 WHERE opt.isPrimaryComponent = 1
                     AND opt.OrderDate > DATEADD(YEAR, -2, GETUTCDATE())
                     AND opt.Status < 6400
