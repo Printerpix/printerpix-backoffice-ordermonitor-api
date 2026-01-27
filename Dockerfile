@@ -9,8 +9,8 @@ COPY src/OrderMonitor.Api/OrderMonitor.Api.csproj src/OrderMonitor.Api/
 COPY src/OrderMonitor.Core/OrderMonitor.Core.csproj src/OrderMonitor.Core/
 COPY src/OrderMonitor.Infrastructure/OrderMonitor.Infrastructure.csproj src/OrderMonitor.Infrastructure/
 
-# Restore dependencies
-RUN dotnet restore
+# Restore dependencies (API project only, not test projects)
+RUN dotnet restore src/OrderMonitor.Api/OrderMonitor.Api.csproj
 
 # Copy source code
 COPY src/ src/
