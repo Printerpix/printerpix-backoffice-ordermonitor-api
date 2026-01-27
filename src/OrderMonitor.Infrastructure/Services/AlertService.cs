@@ -91,15 +91,31 @@ public class AlertService : IAlertService
         }
         sb.AppendLine("</table>");
 
-        // By Facility (Partner-wise breakdown for FacilityStatuses)
-        if (summary.ByFacility.Any())
+        // By Partner/Facility and Status
+        if (summary.ByPartnerStatus.Any())
         {
-            sb.AppendLine("<h4>By Facility/Partner (FacilityStatuses only)</h4>");
-            sb.AppendLine("<table style='border-collapse: collapse; width: 100%; max-width: 500px;'>");
-            sb.AppendLine("<tr style='background-color: #f5f5f5;'><th style='padding: 8px; text-align: left; border: 1px solid #ddd;'>Facility</th><th style='padding: 8px; text-align: right; border: 1px solid #ddd;'>Count</th></tr>");
-            foreach (var facility in summary.ByFacility)
+            sb.AppendLine("<h4>By Partner/Facility</h4>");
+            sb.AppendLine("<table style='border-collapse: collapse; width: 100%; max-width: 700px;'>");
+            sb.AppendLine("<tr style='background-color: #f5f5f5;'>");
+            sb.AppendLine("<th style='padding: 8px; text-align: left; border: 1px solid #ddd;'>Partner/Facility</th>");
+            sb.AppendLine("<th style='padding: 8px; text-align: left; border: 1px solid #ddd;'>Status</th>");
+            sb.AppendLine("<th style='padding: 8px; text-align: right; border: 1px solid #ddd;'>Count</th>");
+            sb.AppendLine("</tr>");
+
+            string? currentPartner = null;
+            foreach (var item in summary.ByPartnerStatus)
             {
-                sb.AppendLine($"<tr><td style='padding: 8px; border: 1px solid #ddd;'>{facility.Key}</td><td style='padding: 8px; text-align: right; border: 1px solid #ddd;'>{facility.Value}</td></tr>");
+                var partnerDisplay = item.Partner == currentPartner ? "" : item.Partner;
+                var borderTop = item.Partner != currentPartner && currentPartner != null
+                    ? "border-top: 2px solid #999;"
+                    : "";
+                currentPartner = item.Partner;
+
+                sb.AppendLine($"<tr style='{borderTop}'>");
+                sb.AppendLine($"<td style='padding: 8px; border: 1px solid #ddd; font-weight: {(string.IsNullOrEmpty(partnerDisplay) ? "normal" : "bold")};'>{partnerDisplay}</td>");
+                sb.AppendLine($"<td style='padding: 8px; border: 1px solid #ddd;'>{item.Status}</td>");
+                sb.AppendLine($"<td style='padding: 8px; text-align: right; border: 1px solid #ddd;'>{item.Count}</td>");
+                sb.AppendLine("</tr>");
             }
             sb.AppendLine("</table>");
         }

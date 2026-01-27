@@ -98,6 +98,23 @@ public class StuckOrderService : IStuckOrderService
             .Take(10)
             .ToList();
 
+        // Group by Partner/Facility and Status
+        var byPartnerStatus = ordersList
+            .GroupBy(o => new
+            {
+                Partner = string.IsNullOrEmpty(o.FacilityName) ? "Unknown" : o.FacilityName,
+                o.Status
+            })
+            .Select(g => new PartnerStatusCount
+            {
+                Partner = g.Key.Partner,
+                Status = g.Key.Status,
+                Count = g.Count()
+            })
+            .OrderBy(p => p.Partner)
+            .ThenByDescending(p => p.Count)
+            .ToList();
+
         return new StuckOrdersSummary
         {
             TotalStuckOrders = totalCount,
@@ -105,6 +122,7 @@ public class StuckOrderService : IStuckOrderService
             ByFacility = byFacility,
             ByStatusCategory = byCategory,
             TopStatuses = topStatuses,
+            ByPartnerStatus = byPartnerStatus,
             GeneratedAt = DateTime.UtcNow
         };
     }

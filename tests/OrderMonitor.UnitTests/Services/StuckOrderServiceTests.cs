@@ -163,9 +163,9 @@ public class StuckOrderServiceTests
     [Theory]
     [InlineData(3060, -10, true)]   // Prep status, 10 hours ago -> stuck (> 6h threshold)
     [InlineData(3060, -2, false)]   // Prep status, 2 hours ago -> not stuck (< 6h threshold)
-    [InlineData(4800, -72, true)]   // Facility status, 72 hours ago -> stuck (> 48h threshold)
+    [InlineData(4800, -168, true)]  // Facility status, 168 hours (7 days) ago -> stuck (> 48h business hours threshold)
     [InlineData(4800, -24, false)]  // Facility status, 24 hours ago -> not stuck (< 48h threshold)
-    [InlineData(9999, -30, true)]   // Unknown status, 30 hours ago -> stuck (> 24h default)
+    [InlineData(9999, -100, true)]  // Unknown status, 100 hours ago -> stuck (> 24h default, even with weekends)
     [InlineData(9999, -12, false)]  // Unknown status, 12 hours ago -> not stuck (< 24h default)
     public void IsOrderStuck_ReturnsCorrectResult(int statusId, int hoursAgo, bool expected)
     {
