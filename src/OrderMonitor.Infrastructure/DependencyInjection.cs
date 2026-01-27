@@ -33,8 +33,10 @@ public static class DependencyInjection
         services.AddScoped<IStuckOrderService, StuckOrderService>();
         services.AddScoped<IAlertService, AlertService>();
 
-        // Register scanner settings
+        // Register configuration settings
         services.Configure<ScannerSettings>(configuration.GetSection(ScannerSettings.SectionName));
+        services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+        services.Configure<AlertSettings>(configuration.GetSection(AlertSettings.SectionName));
 
         // Register background scanner as hosted service
         services.AddHostedService<BackgroundScannerService>();

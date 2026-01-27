@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
+using OrderMonitor.Core.Configuration;
 using OrderMonitor.Core.Models;
 using OrderMonitor.Infrastructure.Services;
 
@@ -9,98 +11,132 @@ namespace OrderMonitor.UnitTests.Services;
 public class AlertServiceTests
 {
     private readonly Mock<ILogger<AlertService>> _loggerMock;
-    private readonly AlertService _service;
+    private readonly SmtpSettings _smtpSettings;
+    private readonly AlertSettings _alertSettings;
 
     public AlertServiceTests()
     {
         _loggerMock = new Mock<ILogger<AlertService>>();
-        _service = new AlertService(_loggerMock.Object);
+        _smtpSettings = new SmtpSettings
+        {
+            Host = "smtp.test.com",
+            Port = 587,
+            Username = "test@test.com",
+            Password = "testpassword",
+            FromEmail = "test@test.com",
+            UseSsl = true
+        };
+        _alertSettings = new AlertSettings
+        {
+            Enabled = true,
+            Recipients = new List<string> { "recipient@test.com" },
+            SubjectPrefix = "[Test]"
+        };
+    }
+
+    private AlertService CreateService(SmtpSettings? smtp = null, AlertSettings? alerts = null)
+    {
+        return new AlertService(
+            Options.Create(smtp ?? _smtpSettings),
+            Options.Create(alerts ?? _alertSettings),
+            _loggerMock.Object);
     }
 
     [Fact]
-    public async Task SendStuckOrdersAlertAsync_LogsWarningWithSummary()
+    public async Task SendStuckOrdersAlertAsync_WhenAlertsDisabled_DoesNotSendEmail()
     {
         // Arrange
+        var disabledAlerts = new AlertSettings { Enabled = false };
+        var service = CreateService(alerts: disabledAlerts);
+
         var summary = new StuckOrdersSummary
         {
             TotalStuckOrders = 10,
-            ByThreshold = new Dictionary<string, int>
-            {
-                ["PrepStatuses (6h)"] = 6,
-                ["FacilityStatuses (48h)"] = 4
-            },
-            ByStatusCategory = new Dictionary<string, int>(),
-            TopStatuses = new List<StatusCount>(),
-            GeneratedAt = DateTime.UtcNow
-        };
-
-        var topOrders = new List<StuckOrderDto>
-        {
-            new() { OrderId = "CO1", StatusId = 3060, Status = "PreparationDone", HoursStuck = 10 },
-            new() { OrderId = "CO2", StatusId = 4800, Status = "ErrorInFacility", HoursStuck = 72 }
-        };
-
-        // Act
-        await _service.SendStuckOrdersAlertAsync(summary, topOrders);
-
-        // Assert - verify logging occurred (no exception thrown)
-        _loggerMock.Verify(
-            l => l.Log(
-                LogLevel.Warning,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => true),
-                It.IsAny<Exception?>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.AtLeast(1));
-    }
-
-    [Fact]
-    public async Task SendStuckOrdersAlertAsync_WithEmptyOrders_DoesNotThrow()
-    {
-        // Arrange
-        var summary = new StuckOrdersSummary
-        {
-            TotalStuckOrders = 0,
             ByThreshold = new Dictionary<string, int>(),
             ByStatusCategory = new Dictionary<string, int>(),
             TopStatuses = new List<StatusCount>(),
             GeneratedAt = DateTime.UtcNow
         };
 
-        var topOrders = new List<StuckOrderDto>();
+        // Act - should not throw
+        await service.SendStuckOrdersAlertAsync(summary, new List<StuckOrderDto>());
 
-        // Act
-        var act = async () => await _service.SendStuckOrdersAlertAsync(summary, topOrders);
-
-        // Assert
-        await act.Should().NotThrowAsync();
+        // Assert - verify debug log about disabled alerts
+        _loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Debug,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("disabled")),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
     }
 
     [Fact]
-    public async Task SendTestAlertAsync_LogsInformation()
+    public async Task SendStuckOrdersAlertAsync_WhenNoRecipients_LogsWarning()
     {
         // Arrange
-        var recipientEmail = "test@example.com";
+        var noRecipientsAlerts = new AlertSettings { Enabled = true, Recipients = new List<string>() };
+        var service = CreateService(alerts: noRecipientsAlerts);
+
+        var summary = new StuckOrdersSummary
+        {
+            TotalStuckOrders = 10,
+            ByThreshold = new Dictionary<string, int>(),
+            ByStatusCategory = new Dictionary<string, int>(),
+            TopStatuses = new List<StatusCount>(),
+            GeneratedAt = DateTime.UtcNow
+        };
 
         // Act
-        await _service.SendTestAlertAsync(recipientEmail);
+        await service.SendStuckOrdersAlertAsync(summary, new List<StuckOrderDto>());
 
-        // Assert
+        // Assert - verify warning log about no recipients
         _loggerMock.Verify(
             l => l.Log(
-                LogLevel.Information,
+                LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => true),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("No alert recipients")),
                 It.IsAny<Exception?>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.AtLeast(1));
+            Times.Once);
+    }
+
+    [Fact]
+    public void Constructor_WithNullSmtpSettings_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        var act = () => new AlertService(
+            null!,
+            Options.Create(_alertSettings),
+            _loggerMock.Object);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("smtpSettings");
+    }
+
+    [Fact]
+    public void Constructor_WithNullAlertSettings_ThrowsArgumentNullException()
+    {
+        // Act & Assert
+        var act = () => new AlertService(
+            Options.Create(_smtpSettings),
+            null!,
+            _loggerMock.Object);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("alertSettings");
     }
 
     [Fact]
     public void Constructor_WithNullLogger_ThrowsArgumentNullException()
     {
         // Act & Assert
-        var act = () => new AlertService(null!);
+        var act = () => new AlertService(
+            Options.Create(_smtpSettings),
+            Options.Create(_alertSettings),
+            null!);
+
         act.Should().Throw<ArgumentNullException>()
             .WithParameterName("logger");
     }
