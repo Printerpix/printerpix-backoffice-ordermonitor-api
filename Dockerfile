@@ -15,8 +15,8 @@ RUN dotnet restore src/OrderMonitor.Api/OrderMonitor.Api.csproj
 # Copy source code
 COPY src/ src/
 
-# Build
-RUN dotnet build -c Release --no-restore
+# Build API project only
+RUN dotnet build src/OrderMonitor.Api/OrderMonitor.Api.csproj -c Release --no-restore
 
 # Publish
 RUN dotnet publish src/OrderMonitor.Api/OrderMonitor.Api.csproj -c Release -o /app/publish --no-build
