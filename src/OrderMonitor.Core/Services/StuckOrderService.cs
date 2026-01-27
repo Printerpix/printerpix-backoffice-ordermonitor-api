@@ -10,10 +10,12 @@ namespace OrderMonitor.Core.Services;
 public class StuckOrderService : IStuckOrderService
 {
     private readonly IOrderRepository _orderRepository;
+    private readonly BusinessHoursCalculator _businessHoursCalculator;
 
     public StuckOrderService(IOrderRepository orderRepository)
     {
         _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+        _businessHoursCalculator = new BusinessHoursCalculator();
     }
 
     /// <inheritdoc />
@@ -23,6 +25,12 @@ public class StuckOrderService : IStuckOrderService
     {
         var stuckOrders = await _orderRepository.GetStuckOrdersAsync(queryParams, cancellationToken);
         var ordersList = stuckOrders.ToList();
+
+        // Recalculate hours using business hours (excluding weekends and holidays)
+        foreach (var order in ordersList)
+        {
+            order.HoursStuck = _businessHoursCalculator.CalculateBusinessHours(order.StuckSince);
+        }
 
         return new StuckOrdersResponse
         {
@@ -44,12 +52,25 @@ public class StuckOrderService : IStuckOrderService
 
         var ordersList = allStuckOrders.ToList();
 
+        // Recalculate hours using business hours (excluding weekends and holidays)
+        foreach (var order in ordersList)
+        {
+            order.HoursStuck = _businessHoursCalculator.CalculateBusinessHours(order.StuckSince);
+        }
+
         // Group by threshold type
         var byThreshold = new Dictionary<string, int>
         {
             ["PrepStatuses (6h)"] = ordersList.Count(o => OrderStatusConfiguration.IsPrepStatus(o.StatusId)),
             ["FacilityStatuses (48h)"] = ordersList.Count(o => OrderStatusConfiguration.IsFacilityStatus(o.StatusId))
         };
+
+        // Group FacilityStatuses by Facility/Partner
+        var byFacility = ordersList
+            .Where(o => OrderStatusConfiguration.IsFacilityStatus(o.StatusId))
+            .GroupBy(o => string.IsNullOrEmpty(o.FacilityName) ? "Unknown" : o.FacilityName)
+            .OrderByDescending(g => g.Count())
+            .ToDictionary(g => g.Key, g => g.Count());
 
         // Group by status category
         var categories = OrderStatusConfiguration.GetStatusCategories();
@@ -81,6 +102,7 @@ public class StuckOrderService : IStuckOrderService
         {
             TotalStuckOrders = totalCount,
             ByThreshold = byThreshold,
+            ByFacility = byFacility,
             ByStatusCategory = byCategory,
             TopStatuses = topStatuses,
             GeneratedAt = DateTime.UtcNow
@@ -105,7 +127,7 @@ public class StuckOrderService : IStuckOrderService
     public bool IsOrderStuck(int statusId, DateTime statusUpdatedAt)
     {
         var thresholdHours = OrderStatusConfiguration.GetThresholdHours(statusId);
-        var hoursInStatus = (DateTime.UtcNow - statusUpdatedAt).TotalHours;
-        return hoursInStatus > thresholdHours;
+        var businessHours = _businessHoursCalculator.CalculateBusinessHours(statusUpdatedAt);
+        return businessHours > thresholdHours;
     }
 }

@@ -24,71 +24,80 @@ public class OrderRepository : IOrderRepository
         CancellationToken cancellationToken = default)
     {
         const string baseSql = @"
-            SELECT
-                co.CONumber AS OrderId,
-                co.orderNumber AS OrderNumber,
-                opt.Status AS StatusId,
-                st.Tracking_Status_Name AS Status,
-                mt.MajorProductTypeName AS ProductType,
-                opt.lastUpdatedDate AS StuckSince,
-                DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) AS HoursStuck,
-                CASE
-                    WHEN opt.Status BETWEEN 3001 AND 3910 THEN 6
-                    WHEN opt.Status BETWEEN 4001 AND 5830 THEN 48
-                    ELSE 24
-                END AS ThresholdHours,
-                co.websiteCode AS Region,
-                NULL AS CustomerEmail
-            FROM ConsolidationOrder co (NOLOCK)
-            INNER JOIN OrderProductTracking opt (NOLOCK)
-                ON opt.CONumber = co.CONumber
-            INNER JOIN luk_Tracking_Status st (NOLOCK)
-                ON st.Tracking_Status_id = opt.Status
-            INNER JOIN mas_SnSpecification sn (NOLOCK)
-                ON sn.SnID = opt.OPT_SnSpId
-            INNER JOIN luk_MajorProductType mt (NOLOCK)
-                ON mt.MProductTypeID = sn.MasterProductTypeID
-            WHERE opt.isPrimaryComponent = 1
-                AND opt.OrderDate > DATEADD(YEAR, -2, GETUTCDATE())
-                AND opt.Status < 6400
-                AND (
-                    (opt.Status BETWEEN 3001 AND 3910
-                     AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 6)
-                    OR
-                    (opt.Status BETWEEN 4001 AND 5830
-                     AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 48)
-                )";
+            WITH StuckOrders AS (
+                SELECT
+                    co.CONumber AS OrderId,
+                    co.orderNumber AS OrderNumber,
+                    opt.Status AS StatusId,
+                    st.Tracking_Status_Name AS Status,
+                    mt.MajorProductTypeName AS ProductType,
+                    opt.lastUpdatedDate AS StuckSince,
+                    DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) AS HoursStuck,
+                    CASE
+                        WHEN opt.Status BETWEEN 3001 AND 3910 THEN 6
+                        WHEN opt.Status BETWEEN 4001 AND 5830 THEN 48
+                        ELSE 24
+                    END AS ThresholdHours,
+                    co.websiteCode AS Region,
+                    NULL AS CustomerEmail,
+                    CAST(ISNULL(opt.FacilityId, 0) AS VARCHAR(20)) AS FacilityCode,
+                    'Facility ' + CAST(ISNULL(opt.FacilityId, 0) AS VARCHAR(10)) AS FacilityName,
+                    ROW_NUMBER() OVER (PARTITION BY co.CONumber ORDER BY opt.lastUpdatedDate DESC) AS RowNum
+                FROM ConsolidationOrder co (NOLOCK)
+                INNER JOIN OrderProductTracking opt (NOLOCK)
+                    ON opt.CONumber = co.CONumber
+                INNER JOIN luk_Tracking_Status st (NOLOCK)
+                    ON st.Tracking_Status_id = opt.Status
+                INNER JOIN mas_SnSpecification sn (NOLOCK)
+                    ON sn.SnID = opt.OPT_SnSpId
+                INNER JOIN luk_MajorProductType mt (NOLOCK)
+                    ON mt.MProductTypeID = sn.MasterProductTypeID
+                WHERE opt.isPrimaryComponent = 1
+                    AND opt.OrderDate > DATEADD(YEAR, -2, GETUTCDATE())
+                    AND opt.Status < 6400
+                    AND (
+                        (opt.Status BETWEEN 3001 AND 3910
+                         AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 6)
+                        OR
+                        (opt.Status BETWEEN 4001 AND 5830
+                         AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) > 48)
+                    )
+            )
+            SELECT OrderId, OrderNumber, StatusId, Status, ProductType, StuckSince,
+                   HoursStuck, ThresholdHours, Region, CustomerEmail, FacilityCode, FacilityName
+            FROM StuckOrders
+            WHERE RowNum = 1";
 
         var sqlBuilder = new StringBuilder(baseSql);
         var parameters = new DynamicParameters();
 
-        // Apply optional filters
+        // Apply optional filters (reference CTE columns, not original table aliases)
         if (queryParams.StatusId.HasValue)
         {
-            sqlBuilder.Append(" AND opt.Status = @StatusId");
+            sqlBuilder.Append(" AND StatusId = @StatusId");
             parameters.Add("StatusId", queryParams.StatusId.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(queryParams.Status))
         {
-            sqlBuilder.Append(" AND st.Tracking_Status_Name LIKE @Status");
+            sqlBuilder.Append(" AND Status LIKE @Status");
             parameters.Add("Status", $"%{queryParams.Status}%");
         }
 
         if (queryParams.MinHours.HasValue)
         {
-            sqlBuilder.Append(" AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) >= @MinHours");
+            sqlBuilder.Append(" AND HoursStuck >= @MinHours");
             parameters.Add("MinHours", queryParams.MinHours.Value);
         }
 
         if (queryParams.MaxHours.HasValue)
         {
-            sqlBuilder.Append(" AND DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) <= @MaxHours");
+            sqlBuilder.Append(" AND HoursStuck <= @MaxHours");
             parameters.Add("MaxHours", queryParams.MaxHours.Value);
         }
 
         // Order by hours stuck descending (oldest first)
-        sqlBuilder.Append(" ORDER BY DATEDIFF(HOUR, opt.lastUpdatedDate, GETUTCDATE()) DESC");
+        sqlBuilder.Append(" ORDER BY HoursStuck DESC");
 
         // Apply pagination
         sqlBuilder.Append(" OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY");
@@ -104,7 +113,7 @@ public class OrderRepository : IOrderRepository
     public async Task<int> GetStuckOrdersCountAsync(CancellationToken cancellationToken = default)
     {
         const string sql = @"
-            SELECT COUNT(*)
+            SELECT COUNT(DISTINCT co.CONumber)
             FROM ConsolidationOrder co (NOLOCK)
             INNER JOIN OrderProductTracking opt (NOLOCK)
                 ON opt.CONumber = co.CONumber

@@ -15,4 +15,6 @@ public class StuckOrderDto
     public int ThresholdHours { get; set; }
     public string? Region { get; set; }
     public string? CustomerEmail { get; set; }
+    public string? FacilityCode { get; set; }
+    public string? FacilityName { get; set; }
 }

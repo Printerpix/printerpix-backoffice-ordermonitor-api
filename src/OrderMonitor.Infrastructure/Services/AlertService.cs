@@ -91,6 +91,19 @@ public class AlertService : IAlertService
         }
         sb.AppendLine("</table>");
 
+        // By Facility (Partner-wise breakdown for FacilityStatuses)
+        if (summary.ByFacility.Any())
+        {
+            sb.AppendLine("<h4>By Facility/Partner (FacilityStatuses only)</h4>");
+            sb.AppendLine("<table style='border-collapse: collapse; width: 100%; max-width: 500px;'>");
+            sb.AppendLine("<tr style='background-color: #f5f5f5;'><th style='padding: 8px; text-align: left; border: 1px solid #ddd;'>Facility</th><th style='padding: 8px; text-align: right; border: 1px solid #ddd;'>Count</th></tr>");
+            foreach (var facility in summary.ByFacility)
+            {
+                sb.AppendLine($"<tr><td style='padding: 8px; border: 1px solid #ddd;'>{facility.Key}</td><td style='padding: 8px; text-align: right; border: 1px solid #ddd;'>{facility.Value}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+
         // Top statuses
         if (summary.TopStatuses.Any())
         {
