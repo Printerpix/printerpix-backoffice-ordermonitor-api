@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using OrderMonitor.Core.Interfaces;
+using OrderMonitor.Core.Models;
 
 namespace OrderMonitor.Api.Controllers;
 
@@ -12,12 +13,83 @@ namespace OrderMonitor.Api.Controllers;
 public class AlertsController : ControllerBase
 {
     private readonly IAlertService _alertService;
+    private readonly IStuckOrderService _stuckOrderService;
     private readonly ILogger<AlertsController> _logger;
 
-    public AlertsController(IAlertService alertService, ILogger<AlertsController> logger)
+    public AlertsController(
+        IAlertService alertService,
+        IStuckOrderService stuckOrderService,
+        ILogger<AlertsController> logger)
     {
         _alertService = alertService ?? throw new ArgumentNullException(nameof(alertService));
+        _stuckOrderService = stuckOrderService ?? throw new ArgumentNullException(nameof(stuckOrderService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Triggers a stuck orders scan and sends alert to all configured recipients.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Scan result with stuck orders count</returns>
+    /// <response code="200">Scan completed and alert sent</response>
+    /// <response code="500">Failed to complete scan or send alert</response>
+    [HttpPost("trigger")]
+    [ProducesResponseType(typeof(TriggerAlertResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<TriggerAlertResponse>> TriggerStuckOrdersAlert(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Manual stuck orders alert triggered");
+
+            // Get summary
+            var summary = await _stuckOrderService.GetStuckOrdersSummaryAsync(cancellationToken);
+
+            if (summary.TotalStuckOrders == 0)
+            {
+                return Ok(new TriggerAlertResponse
+                {
+                    Success = true,
+                    Message = "No stuck orders found. No alert sent.",
+                    StuckOrdersCount = 0,
+                    TriggeredAt = DateTime.UtcNow
+                });
+            }
+
+            // Get stuck orders for the alert
+            var queryParams = new StuckOrderQueryParams { Limit = 100, Offset = 0 };
+            var stuckOrdersResponse = await _stuckOrderService.GetStuckOrdersAsync(queryParams, cancellationToken);
+
+            // Send alert
+            await _alertService.SendStuckOrdersAlertAsync(summary, stuckOrdersResponse.Items, cancellationToken);
+
+            _logger.LogInformation("Manual alert sent for {Count} stuck orders", summary.TotalStuckOrders);
+
+            return Ok(new TriggerAlertResponse
+            {
+                Success = true,
+                Message = $"Alert sent for {summary.TotalStuckOrders} stuck orders",
+                StuckOrdersCount = summary.TotalStuckOrders,
+                TriggeredAt = DateTime.UtcNow
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("SMTP password"))
+        {
+            _logger.LogError(ex, "SMTP password not configured");
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                error = "SMTP password not configured. Set SMTP_PASSWORD environment variable."
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to trigger stuck orders alert");
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                error = $"Failed to trigger alert: {ex.Message}"
+            });
+        }
     }
 
     /// <summary>
@@ -106,4 +178,30 @@ public class TestAlertResponse
     /// Timestamp when the alert was sent.
     /// </summary>
     public DateTime SentAt { get; set; }
+}
+
+/// <summary>
+/// Response model for trigger alert result.
+/// </summary>
+public class TriggerAlertResponse
+{
+    /// <summary>
+    /// Whether the alert was triggered successfully.
+    /// </summary>
+    public bool Success { get; set; }
+
+    /// <summary>
+    /// Status message.
+    /// </summary>
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Number of stuck orders found.
+    /// </summary>
+    public int StuckOrdersCount { get; set; }
+
+    /// <summary>
+    /// Timestamp when the alert was triggered.
+    /// </summary>
+    public DateTime TriggeredAt { get; set; }
 }
