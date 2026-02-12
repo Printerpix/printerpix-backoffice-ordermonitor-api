@@ -5,24 +5,42 @@ namespace OrderMonitor.Infrastructure.Security;
 
 /// <summary>
 /// Utility for encrypting and decrypting passwords using AES encryption.
+/// The encryption key must be provided via configuration (Database:EncryptionKey)
+/// and is never hardcoded.
 /// </summary>
 public static class PasswordEncryptor
 {
-    // Default key - in production, use a key from environment variable or secure storage
-    private static readonly string DefaultKey = "OrderMonitor2026SecureKey32Bytes!";
+    private static string? _configuredKey;
+
+    /// <summary>
+    /// Sets the encryption key from application configuration.
+    /// Must be called during startup before any Encrypt/Decrypt operations.
+    /// </summary>
+    public static void Configure(string encryptionKey)
+    {
+        if (string.IsNullOrWhiteSpace(encryptionKey))
+            throw new ArgumentException("Encryption key cannot be null or empty.", nameof(encryptionKey));
+
+        _configuredKey = encryptionKey;
+    }
 
     /// <summary>
     /// Encrypts a plain text password.
     /// </summary>
     /// <param name="plainText">The plain text password to encrypt.</param>
-    /// <param name="key">Optional encryption key (32 characters). If not provided, uses default key.</param>
+    /// <param name="key">Optional encryption key. If not provided, uses the configured key.</param>
     /// <returns>Base64 encoded encrypted string with IV prepended.</returns>
     public static string Encrypt(string plainText, string? key = null)
     {
         if (string.IsNullOrEmpty(plainText))
             return plainText;
 
-        var encryptionKey = GetKeyBytes(key ?? DefaultKey);
+        var effectiveKey = key ?? _configuredKey
+            ?? throw new InvalidOperationException(
+                "Encryption key is not configured. Set Database__EncryptionKey environment variable " +
+                "or call PasswordEncryptor.Configure() during startup.");
+
+        var encryptionKey = GetKeyBytes(effectiveKey);
 
         using var aes = Aes.Create();
         aes.Key = encryptionKey;
@@ -44,44 +62,39 @@ public static class PasswordEncryptor
     /// Decrypts an encrypted password.
     /// </summary>
     /// <param name="encryptedText">The Base64 encoded encrypted string.</param>
-    /// <param name="key">Optional encryption key (32 characters). If not provided, uses default key.</param>
+    /// <param name="key">Optional encryption key. If not provided, uses the configured key.</param>
     /// <returns>The decrypted plain text password.</returns>
     public static string Decrypt(string encryptedText, string? key = null)
     {
         if (string.IsNullOrEmpty(encryptedText))
             return encryptedText;
 
-        // Check if it looks like an encrypted value (Base64 with reasonable length)
         if (!IsEncrypted(encryptedText))
-            return encryptedText; // Return as-is if not encrypted
-
-        try
-        {
-            var encryptionKey = GetKeyBytes(key ?? DefaultKey);
-            var fullCipher = Convert.FromBase64String(encryptedText);
-
-            using var aes = Aes.Create();
-            aes.Key = encryptionKey;
-
-            // Extract IV from the beginning
-            var iv = new byte[aes.BlockSize / 8];
-            var cipherBytes = new byte[fullCipher.Length - iv.Length];
-
-            Buffer.BlockCopy(fullCipher, 0, iv, 0, iv.Length);
-            Buffer.BlockCopy(fullCipher, iv.Length, cipherBytes, 0, cipherBytes.Length);
-
-            aes.IV = iv;
-
-            using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-            var plainBytes = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
-
-            return Encoding.UTF8.GetString(plainBytes);
-        }
-        catch
-        {
-            // If decryption fails, return original (might be plain text)
             return encryptedText;
-        }
+
+        var effectiveKey = key ?? _configuredKey
+            ?? throw new InvalidOperationException(
+                "Encryption key is not configured. Set Database__EncryptionKey environment variable " +
+                "or call PasswordEncryptor.Configure() during startup.");
+
+        var encryptionKey = GetKeyBytes(effectiveKey);
+        var fullCipher = Convert.FromBase64String(encryptedText);
+
+        using var aes = Aes.Create();
+        aes.Key = encryptionKey;
+
+        var iv = new byte[aes.BlockSize / 8];
+        var cipherBytes = new byte[fullCipher.Length - iv.Length];
+
+        Buffer.BlockCopy(fullCipher, 0, iv, 0, iv.Length);
+        Buffer.BlockCopy(fullCipher, iv.Length, cipherBytes, 0, cipherBytes.Length);
+
+        aes.IV = iv;
+
+        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+        var plainBytes = decryptor.TransformFinalBlock(cipherBytes, 0, cipherBytes.Length);
+
+        return Encoding.UTF8.GetString(plainBytes);
     }
 
     /// <summary>
@@ -95,7 +108,7 @@ public static class PasswordEncryptor
         try
         {
             var bytes = Convert.FromBase64String(value);
-            return bytes.Length >= 32; // At least IV (16) + some encrypted data
+            return bytes.Length >= 32;
         }
         catch
         {
@@ -103,9 +116,16 @@ public static class PasswordEncryptor
         }
     }
 
+    /// <summary>
+    /// Resets the configured key. Used for testing only.
+    /// </summary>
+    internal static void Reset()
+    {
+        _configuredKey = null;
+    }
+
     private static byte[] GetKeyBytes(string key)
     {
-        // Ensure key is exactly 32 bytes (256 bits) for AES-256
         var keyBytes = Encoding.UTF8.GetBytes(key);
         var result = new byte[32];
 
@@ -116,7 +136,6 @@ public static class PasswordEncryptor
         else
         {
             Buffer.BlockCopy(keyBytes, 0, result, 0, keyBytes.Length);
-            // Pad with derived bytes
             using var sha = SHA256.Create();
             var hash = sha.ComputeHash(keyBytes);
             Buffer.BlockCopy(hash, 0, result, keyBytes.Length, 32 - keyBytes.Length);

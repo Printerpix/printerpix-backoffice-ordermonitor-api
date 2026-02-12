@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
@@ -11,6 +12,7 @@ namespace OrderMonitor.IntegrationTests;
 /// <summary>
 /// Custom WebApplicationFactory for integration testing.
 /// Replaces real services with mocks for isolated testing.
+/// Provides minimal required configuration to satisfy startup validation.
 /// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
@@ -21,11 +23,29 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Testing");
 
+        // Provide minimal configuration required by ConfigurationValidator
+        builder.ConfigureAppConfiguration((context, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:Provider"] = "sqlserver",
+                ["Database:ConnectionString"] = "Server=localhost;Database=TestDb;Trusted_Connection=True;",
+                ["SmtpSettings:Host"] = "localhost",
+                ["SmtpSettings:Port"] = "25",
+                ["Alerts:Enabled"] = "false"
+            });
+        });
+
         builder.ConfigureServices(services =>
         {
             // Remove real service registrations
             services.RemoveAll<IStuckOrderService>();
             services.RemoveAll<IAlertService>();
+
+            // Replace config validator with no-op for testing
+            services.RemoveAll<IConfigurationValidator>();
+            services.AddSingleton<IConfigurationValidator>(sp =>
+                new NoOpConfigurationValidator());
 
             // Add mocked services
             services.AddSingleton(MockStuckOrderService.Object);
@@ -104,4 +124,12 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             .Setup(s => s.SendTestAlertAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
     }
+}
+
+/// <summary>
+/// No-op configuration validator for integration testing.
+/// </summary>
+internal class NoOpConfigurationValidator : IConfigurationValidator
+{
+    public void Validate() { }
 }

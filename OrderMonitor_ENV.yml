@@ -1,0 +1,65 @@
+# OrderMonitor API - Environment Configuration
+# This file contains ALL configuration values for the application.
+# Override precedence: K8s Secrets > ConfigMap > OS env vars > this file
+#
+# Key naming: Use double-underscore (__) as hierarchy separator.
+# Example: Database__ConnectionString maps to IConfiguration["Database:ConnectionString"]
+
+# ===== Database Configuration =====
+Database__Provider: "sqlserver"                    # sqlserver | mysql | postgresql
+Database__ConnectionString: ""                     # Full connection string (without password if using EncryptedPassword)
+Database__EncryptedPassword: ""                    # Base64-encoded AES-encrypted password
+Database__EncryptionKey: ""                        # AES-256 key for decrypting EncryptedPassword (32 chars)
+Database__MaxPoolSize: "100"
+Database__CommandTimeout: "30"
+
+# ===== SMTP Configuration =====
+SmtpSettings__Host: ""
+SmtpSettings__Port: "587"
+SmtpSettings__Username: ""
+SmtpSettings__Password: ""                         # Encrypted SMTP password
+SmtpSettings__FromEmail: ""
+SmtpSettings__UseSsl: "true"
+
+# ===== Alert Configuration =====
+Alerts__Enabled: "true"
+Alerts__Recipients: ""                             # Comma-separated email addresses
+Alerts__SubjectPrefix: "[Order Monitor]"
+
+# ===== Scanner Configuration =====
+Scanner__Enabled: "true"
+Scanner__IntervalMinutes: "15"
+Scanner__BatchSize: "1000"
+
+# ===== Status Thresholds =====
+StatusThresholds__PrepStatuses__MinStatusId: "3001"
+StatusThresholds__PrepStatuses__MaxStatusId: "3910"
+StatusThresholds__PrepStatuses__ThresholdHours: "6"
+StatusThresholds__FacilityStatuses__MinStatusId: "4001"
+StatusThresholds__FacilityStatuses__MaxStatusId: "5830"
+StatusThresholds__FacilityStatuses__ThresholdHours: "48"
+
+# ===== Business Hours =====
+BusinessHours__Timezone: "Europe/London"
+BusinessHours__StartHour: "0"                      # 0 = full 24-hour days
+BusinessHours__EndHour: "0"
+BusinessHours__Holidays: ""                        # Comma-separated yyyy-MM-dd dates
+
+# ===== Health Check =====
+HealthCheck__Path: "/health"
+HealthCheck__IncludeDatabase: "true"
+
+# ===== Swagger =====
+Swagger__Enabled: "true"
+Swagger__Title: "OrderMonitor API"
+Swagger__Version: "v1"
+
+# ===== Logging =====
+Logging__LogLevel__Default: "Information"
+Logging__LogLevel__Microsoft.AspNetCore: "Warning"
+Logging__LogLevel__OrderMonitor: "Debug"
+
+# ===== Application =====
+AllowedHosts: "*"
+ASPNETCORE_ENVIRONMENT: "Production"
+ASPNETCORE_URLS: "http://+:8080"

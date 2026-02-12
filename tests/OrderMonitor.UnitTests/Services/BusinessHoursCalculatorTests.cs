@@ -1,3 +1,4 @@
+using OrderMonitor.Core.Configuration;
 using OrderMonitor.Core.Services;
 using Xunit;
 
@@ -159,17 +160,39 @@ public class BusinessHoursCalculatorTests
     }
 
     [Fact]
-    public void DefaultHolidays_AreLoaded()
+    public void DefaultConstructor_NoHolidays_AllWeekdaysAreBusinessDays()
     {
-        // Create calculator with default holidays
+        // Create calculator with default constructor (no hardcoded holidays)
         var defaultCalculator = new BusinessHoursCalculator();
 
-        // Check that Christmas 2026 is a holiday
-        var christmas2026 = new DateTime(2026, 12, 25);
-        Assert.False(defaultCalculator.IsBusinessDay(christmas2026));
+        // Christmas 2026 is a regular weekday when no holidays configured
+        var christmas2026 = new DateTime(2026, 12, 25); // Friday
+        Assert.True(defaultCalculator.IsBusinessDay(christmas2026));
 
-        // Check that a regular Wednesday is a business day
+        // Regular Wednesday is still a business day
         var regularDay = new DateTime(2026, 1, 7); // Wednesday
         Assert.True(defaultCalculator.IsBusinessDay(regularDay));
+
+        // Weekends are still non-business days
+        var saturday = new DateTime(2026, 1, 10);
+        Assert.False(defaultCalculator.IsBusinessDay(saturday));
+    }
+
+    [Fact]
+    public void IOptionsConstructor_LoadsHolidaysFromSettings()
+    {
+        // Arrange
+        var settings = Microsoft.Extensions.Options.Options.Create(new BusinessHoursSettings
+        {
+            Holidays = "2026-12-25,2026-01-01"
+        });
+
+        // Act
+        var calculator = new BusinessHoursCalculator(settings);
+
+        // Assert
+        Assert.False(calculator.IsBusinessDay(new DateTime(2026, 12, 25)));
+        Assert.False(calculator.IsBusinessDay(new DateTime(2026, 1, 1)));
+        Assert.True(calculator.IsBusinessDay(new DateTime(2026, 1, 7))); // Wednesday
     }
 }
