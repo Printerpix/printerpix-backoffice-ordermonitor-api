@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ordermonitor-api
+  namespace: ordermonitor
+  labels:
+    app.kubernetes.io/name: ordermonitor-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: printerpix
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ordermonitor-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

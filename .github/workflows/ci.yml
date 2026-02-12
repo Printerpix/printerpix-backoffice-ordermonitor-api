@@ -93,6 +93,29 @@ jobs:
       - name: Run Code Analysis
         run: dotnet build --no-restore --configuration Release /p:TreatWarningsAsErrors=false
 
+  validate-manifests:
+    name: Validate K8s Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate YAML syntax
+        run: |
+          pip install pyyaml
+          for f in k8s/base/*.yaml; do
+            echo "Validating $f..."
+            python3 -c "import yaml; yaml.safe_load(open('$f'))"
+          done
+
+      - name: Validate Kustomize overlays
+        run: |
+          echo "Validating staging overlay..."
+          kubectl kustomize k8s/overlays/staging > /dev/null
+          echo "Validating production overlay..."
+          kubectl kustomize k8s/overlays/production > /dev/null
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest
