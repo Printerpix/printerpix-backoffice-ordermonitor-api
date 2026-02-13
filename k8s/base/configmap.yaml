@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ordermonitor-api-config
+  namespace: ordermonitor
+  labels:
+    app.kubernetes.io/name: ordermonitor-api
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: printerpix
+data:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:8080"
+  Logging__LogLevel__Default: "Information"
+  Logging__LogLevel__Microsoft.AspNetCore: "Warning"
+  Logging__LogLevel__Microsoft.EntityFrameworkCore: "Warning"

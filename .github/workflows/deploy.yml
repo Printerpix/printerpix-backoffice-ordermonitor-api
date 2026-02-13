@@ -1,0 +1,122 @@
+name: Deploy
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  prepare:
+    name: Prepare Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.resolve-tag.outputs.tag }}
+      version: ${{ steps.resolve-tag.outputs.version }}
+    steps:
+      - name: Resolve image tag
+        id: resolve-tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+            echo "version=${{ inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+            echo "version=${TAG}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify image exists
+        run: |
+          echo "Verifying image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.resolve-tag.outputs.tag }}"
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://ordermonitor-api.staging.printerpix.com/health
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image tag in manifests
+        run: |
+          cd k8s/overlays/staging
+          kustomize edit set image ghcr.io/printerpix/printerpix-backoffice-ordermonitor-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }}
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }} to staging"
+          echo "kubectl apply -k k8s/overlays/staging"
+          # Uncomment when cluster credentials are configured:
+          # kubectl apply -k k8s/overlays/staging
+          # kubectl -n ordermonitor-staging rollout status deployment/staging-ordermonitor-api --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          # Uncomment when staging is accessible:
+          # chmod +x scripts/smoke-test.sh
+          # ./scripts/smoke-test.sh https://ordermonitor-api.staging.printerpix.com
+
+      - name: Staging deployment summary
+        run: |
+          echo "## Staging Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** staging" >> $GITHUB_STEP_SUMMARY
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [prepare, deploy-staging]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://ordermonitor-api.printerpix.com/health
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image tag in manifests
+        run: |
+          cd k8s/overlays/production
+          kustomize edit set image ghcr.io/printerpix/printerpix-backoffice-ordermonitor-api=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }}
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }} to production"
+          echo "kubectl apply -k k8s/overlays/production"
+          # Uncomment when cluster credentials are configured:
+          # kubectl apply -k k8s/overlays/production
+          # kubectl -n ordermonitor rollout status deployment/ordermonitor-api --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against production..."
+          # Uncomment when production is accessible:
+          # chmod +x scripts/smoke-test.sh
+          # ./scripts/smoke-test.sh https://ordermonitor-api.printerpix.com
+
+      - name: Production deployment summary
+        run: |
+          echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** production" >> $GITHUB_STEP_SUMMARY

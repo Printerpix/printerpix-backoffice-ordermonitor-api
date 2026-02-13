@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ordermonitor-api-config
+data:
+  ASPNETCORE_ENVIRONMENT: "Staging"
+  Logging__LogLevel__Default: "Debug"
+  Logging__LogLevel__Microsoft.AspNetCore: "Information"
+  Logging__LogLevel__Microsoft.EntityFrameworkCore: "Information"
