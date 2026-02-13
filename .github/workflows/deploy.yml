@@ -54,7 +54,7 @@ jobs:
       url: https://ordermonitor-api.staging.printerpix.com/health
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set image tag in manifests
         run: |
@@ -92,7 +92,7 @@ jobs:
       url: https://ordermonitor-api.printerpix.com/health
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set image tag in manifests
         run: |
