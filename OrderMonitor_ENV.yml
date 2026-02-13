@@ -5,8 +5,13 @@
 # Key naming: Use double-underscore (__) as hierarchy separator.
 # Example: Database__ConnectionString maps to IConfiguration["Database:ConnectionString"]
 
+# ===== Database Connection Enable/Disable =====
+SQL_CONNECTIONENABLE: "true"                       # Enable SQL Server connection
+MYSQL_CONNECTIONENABLE: "false"                    # Enable MySQL connection
+POSTGRES_CONNECTIONENABLE: "false"                 # Enable PostgreSQL connection
+
 # ===== Database Configuration =====
-Database__Provider: "sqlserver"                    # sqlserver | mysql | postgresql
+Database__Provider: "sqlserver"                    # sqlserver | mysql | postgresql (fallback if no enable flags set)
 Database__ConnectionString: ""                     # Full connection string (without password if using EncryptedPassword)
 Database__EncryptedPassword: ""                    # Base64-encoded AES-encrypted password
 Database__EncryptionKey: ""                        # AES-256 key for decrypting EncryptedPassword (32 chars)

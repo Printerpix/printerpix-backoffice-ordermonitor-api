@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Moq;
 using OrderMonitor.Core.Interfaces;
 using OrderMonitor.Core.Models;
+using OrderMonitor.Infrastructure.Data;
 
 namespace OrderMonitor.IntegrationTests;
 
@@ -18,6 +20,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     public Mock<IStuckOrderService> MockStuckOrderService { get; } = new();
     public Mock<IAlertService> MockAlertService { get; } = new();
+    public Mock<IDiagnosticsService> MockDiagnosticsService { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -28,7 +31,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Database:Provider"] = "sqlserver",
+                ["Database:Provider"] = "SqlServer",
                 ["Database:ConnectionString"] = "Server=localhost;Database=TestDb;Trusted_Connection=True;",
                 ["SmtpSettings:Host"] = "localhost",
                 ["SmtpSettings:Port"] = "25",
@@ -38,9 +41,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            // Replace DbContext with InMemory provider for testing
+            services.RemoveAll<DbContextOptions<OrderMonitorDbContext>>();
+            services.RemoveAll<OrderMonitorDbContext>();
+            services.AddDbContext<OrderMonitorDbContext>(options =>
+                options.UseInMemoryDatabase("TestDb"));
+
             // Remove real service registrations
             services.RemoveAll<IStuckOrderService>();
             services.RemoveAll<IAlertService>();
+            services.RemoveAll<IDiagnosticsService>();
 
             // Replace config validator with no-op for testing
             services.RemoveAll<IConfigurationValidator>();
@@ -50,6 +60,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // Add mocked services
             services.AddSingleton(MockStuckOrderService.Object);
             services.AddSingleton(MockAlertService.Object);
+            services.AddSingleton(MockDiagnosticsService.Object);
         });
     }
 
@@ -62,6 +73,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         // Reset mocks for test isolation
         MockStuckOrderService.Reset();
         MockAlertService.Reset();
+        MockDiagnosticsService.Reset();
 
         // Default stuck orders response
         MockStuckOrderService
@@ -118,6 +130,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                     new() { StatusId = 17, Status = "Pending Print", Timestamp = DateTime.UtcNow, Duration = "Ongoing", IsStuck = false }
                 }
             });
+
+        // Default diagnostics mock
+        MockDiagnosticsService
+            .Setup(s => s.GetTablesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { "ConsolidationOrder", "OrderProductTracking" });
 
         // Default test alert - succeeds
         MockAlertService

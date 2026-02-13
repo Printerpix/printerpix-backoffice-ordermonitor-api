@@ -1,4 +1,3 @@
-using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using OrderMonitor.Core.Interfaces;
 
@@ -12,12 +11,12 @@ namespace OrderMonitor.Api.Controllers;
 [Produces("application/json")]
 public class DiagnosticsController : ControllerBase
 {
-    private readonly IDbConnectionFactory _connectionFactory;
+    private readonly IDiagnosticsService _diagnosticsService;
     private readonly ILogger<DiagnosticsController> _logger;
 
-    public DiagnosticsController(IDbConnectionFactory connectionFactory, ILogger<DiagnosticsController> logger)
+    public DiagnosticsController(IDiagnosticsService diagnosticsService, ILogger<DiagnosticsController> logger)
     {
-        _connectionFactory = connectionFactory;
+        _diagnosticsService = diagnosticsService;
         _logger = logger;
     }
 
@@ -29,9 +28,7 @@ public class DiagnosticsController : ControllerBase
     {
         try
         {
-            using var conn = _connectionFactory.CreateConnection();
-            var tables = await conn.QueryAsync<string>(
-                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME LIKE '%Order%' ORDER BY TABLE_NAME");
+            var tables = await _diagnosticsService.GetTablesAsync("Order");
             return Ok(tables);
         }
         catch (Exception ex)
@@ -48,13 +45,7 @@ public class DiagnosticsController : ControllerBase
     {
         try
         {
-            using var conn = _connectionFactory.CreateConnection();
-            var columns = await conn.QueryAsync<dynamic>(
-                @"SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, CHARACTER_MAXIMUM_LENGTH
-                  FROM INFORMATION_SCHEMA.COLUMNS
-                  WHERE TABLE_NAME = @TableName
-                  ORDER BY ORDINAL_POSITION",
-                new { TableName = tableName });
+            var columns = await _diagnosticsService.GetColumnsAsync(tableName);
             return Ok(columns);
         }
         catch (Exception ex)
@@ -78,9 +69,8 @@ public class DiagnosticsController : ControllerBase
 
         try
         {
-            using var conn = _connectionFactory.CreateConnection();
-            var results = await conn.QueryAsync<dynamic>(request.Sql);
-            return Ok(results.Take(100)); // Limit to 100 rows
+            var results = await _diagnosticsService.ExecuteQueryAsync(request.Sql);
+            return Ok(results);
         }
         catch (Exception ex)
         {

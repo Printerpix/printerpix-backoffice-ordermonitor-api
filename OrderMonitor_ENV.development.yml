@@ -2,6 +2,11 @@
 # Non-sensitive values for local development.
 # Sensitive values (passwords, keys) should be set as OS environment variables.
 
+# ===== Database Connection Enable/Disable =====
+SQL_CONNECTIONENABLE: "true"
+MYSQL_CONNECTIONENABLE: "false"
+POSTGRES_CONNECTIONENABLE: "false"
+
 # ===== Database Configuration =====
 Database__Provider: "sqlserver"
 Database__ConnectionString: "Server=localhost,1433;Database=PrinterPix_BO_Live;User Id=sa;Password={ENCRYPTED};TrustServerCertificate=True;ApplicationIntent=ReadOnly;"
@@ -20,7 +25,7 @@ SmtpSettings__UseSsl: "true"
 
 # ===== Alert Configuration =====
 Alerts__Enabled: "true"
-Alerts__Recipients: "ranganathan.e@syncoms.com"
+Alerts__Recipients: "ranganathan.e@syncoms.com,muhammad.zakir@syncoms.co.uk,yarik.sobanski@syncoms.co.uk,michael.sobanski@syncoms.co.uk"
 Alerts__SubjectPrefix: "[Order Monitor DEV]"
 
 # ===== Scanner Configuration =====
