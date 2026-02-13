@@ -11,7 +11,7 @@ public class EntityModelTests
         var entity = new ConsolidationOrderEntity();
         entity.CONumber.Should().Be(string.Empty);
         entity.OrderNumber.Should().BeNull();
-        entity.WebsiteCode.Should().BeNull();
+        entity.WebsiteCode.Should().Be(0);
         entity.OrderProductTrackings.Should().BeEmpty();
     }
 
@@ -24,7 +24,7 @@ public class EntityModelTests
         entity.Status.Should().Be(0);
         entity.LastUpdatedDate.Should().BeNull();
         entity.IsPrimaryComponent.Should().BeFalse();
-        entity.TPartnerCode.Should().BeNull();
+        entity.TPartnerCode.Should().Be(0);
         entity.OptSnSpId.Should().BeNull();
         entity.OrderDate.Should().BeNull();
     }
@@ -70,12 +70,12 @@ public class EntityModelTests
         {
             CONumber = "CO12345",
             OrderNumber = "12345",
-            WebsiteCode = "US"
+            WebsiteCode = 1
         };
 
         entity.CONumber.Should().Be("CO12345");
         entity.OrderNumber.Should().Be("12345");
-        entity.WebsiteCode.Should().Be("US");
+        entity.WebsiteCode.Should().Be(1);
     }
 
     [Fact]

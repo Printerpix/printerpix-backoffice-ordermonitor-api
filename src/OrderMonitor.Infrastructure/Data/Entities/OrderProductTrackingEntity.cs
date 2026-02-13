@@ -27,7 +27,7 @@ public class OrderProductTrackingEntity
     public bool IsPrimaryComponent { get; set; }
 
     [Column("TPartnerCode")]
-    public int? TPartnerCode { get; set; }
+    public int TPartnerCode { get; set; }
 
     [Column("OPT_SnSpId")]
     public int? OptSnSpId { get; set; }

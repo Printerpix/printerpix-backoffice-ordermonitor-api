@@ -79,9 +79,9 @@ public class EfCoreOrderRepository : IOrderRepository
                 StuckSince = o.LastUpdatedDate!.Value,
                 HoursStuck = (int)(utcNow - o.LastUpdatedDate!.Value).TotalHours,
                 ThresholdHours = OrderStatusConfiguration.GetThresholdHours(o.Status),
-                Region = o.WebsiteCode,
+                Region = o.WebsiteCode.ToString(),
                 CustomerEmail = null,
-                FacilityCode = o.FacilityCode?.ToString(),
+                FacilityCode = o.FacilityCode.ToString(),
                 FacilityName = o.FacilityName ?? "Unknown"
             });
 

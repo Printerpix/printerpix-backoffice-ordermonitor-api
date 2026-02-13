@@ -19,8 +19,7 @@ public class ConsolidationOrderEntity
     public string? OrderNumber { get; set; }
 
     [Column("websiteCode")]
-    [StringLength(20)]
-    public string? WebsiteCode { get; set; }
+    public int WebsiteCode { get; set; }
 
     public ICollection<OrderProductTrackingEntity> OrderProductTrackings { get; set; } = [];
 }

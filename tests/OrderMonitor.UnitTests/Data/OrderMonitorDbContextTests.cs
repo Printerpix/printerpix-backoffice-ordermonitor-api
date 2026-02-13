@@ -42,7 +42,7 @@ public class OrderMonitorDbContextTests : IDisposable
         {
             CONumber = "CO12345",
             OrderNumber = "12345",
-            WebsiteCode = "US"
+            WebsiteCode = 1
         };
 
         _dbContext.ConsolidationOrders.Add(order);
@@ -51,7 +51,7 @@ public class OrderMonitorDbContextTests : IDisposable
         var retrieved = await _dbContext.ConsolidationOrders.FindAsync("CO12345");
         retrieved.Should().NotBeNull();
         retrieved!.OrderNumber.Should().Be("12345");
-        retrieved.WebsiteCode.Should().Be("US");
+        retrieved.WebsiteCode.Should().Be(1);
     }
 
     [Fact]

@@ -98,7 +98,7 @@ public class QueryPerformanceTests : IAsyncLifetime
         var statusIds = new[] { 3050, 3060, 4001, 4200, 6400 };
         var specIds = new[] { 100, 200, 300, 400 };
         var partnerIds = new[] { 10, 20 };
-        var websites = new[] { "US", "UK", "DE", "FR", "AU" };
+        var websites = new[] { 1, 2, 3, 4, 5 };
         var random = new Random(42); // deterministic
 
         long optId = 1;

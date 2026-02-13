@@ -72,10 +72,10 @@ public abstract class DatabaseProviderTestBase : IAsyncLifetime
 
         // Orders
         DbContext.ConsolidationOrders.AddRange(
-            new ConsolidationOrderEntity { CONumber = "CO001", OrderNumber = "ORD001", WebsiteCode = "US" },
-            new ConsolidationOrderEntity { CONumber = "CO002", OrderNumber = "ORD002", WebsiteCode = "UK" },
-            new ConsolidationOrderEntity { CONumber = "CO003", OrderNumber = "ORD003", WebsiteCode = "DE" },
-            new ConsolidationOrderEntity { CONumber = "CO004", OrderNumber = "ORD004", WebsiteCode = "US" }
+            new ConsolidationOrderEntity { CONumber = "CO001", OrderNumber = "ORD001", WebsiteCode = 1 },
+            new ConsolidationOrderEntity { CONumber = "CO002", OrderNumber = "ORD002", WebsiteCode = 2 },
+            new ConsolidationOrderEntity { CONumber = "CO003", OrderNumber = "ORD003", WebsiteCode = 3 },
+            new ConsolidationOrderEntity { CONumber = "CO004", OrderNumber = "ORD004", WebsiteCode = 1 }
         );
 
         // Stuck prep order (>6h at status 3050)
@@ -164,7 +164,7 @@ public abstract class DatabaseProviderTestBase : IAsyncLifetime
         order.OrderNumber.Should().Be("ORD001");
         order.Status.Should().Be("PreparationStarted");
         order.ProductType.Should().Be("Photo Book");
-        order.Region.Should().Be("US");
+        order.Region.Should().Be("1");
         order.FacilityName.Should().Be("Facility Alpha");
     }
 
