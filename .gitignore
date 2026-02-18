@@ -79,9 +79,10 @@ coverage*.xml
 appsettings.*.json
 !appsettings.json
 
-# YAML config - production secrets must never be committed
-OrderMonitor_ENV.production.yml
-OrderMonitor_ENV.staging.yml
+# YAML config - environment-specific files may contain secrets
+OrderMonitor_ENV*.yml
+!OrderMonitor_ENV.yml
+docker.env
 
 # Secrets
 *.pem

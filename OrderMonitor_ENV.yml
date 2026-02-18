@@ -12,9 +12,9 @@ POSTGRES_CONNECTIONENABLE: "false"                 # Enable PostgreSQL connectio
 
 # ===== Database Configuration =====
 Database__Provider: "sqlserver"                    # sqlserver | mysql | postgresql (fallback if no enable flags set)
-Database__ConnectionString: ""                     # Full connection string (without password if using EncryptedPassword)
-Database__EncryptedPassword: ""                    # Base64-encoded AES-encrypted password
-Database__EncryptionKey: ""                        # AES-256 key for decrypting EncryptedPassword (32 chars)
+Database__ConnectionString: ""                     # Full connection string (without password if using EncryptedPassword). Set via env var or K8s secret.
+Database__EncryptedPassword: ""                    # Base64-encoded AES-encrypted password. Use tools/EncryptPassword to generate.
+Database__EncryptionKey: ""                        # AES-256 key for decrypting EncryptedPassword (32 chars). NEVER commit real values.
 Database__MaxPoolSize: "100"
 Database__CommandTimeout: "30"
 
@@ -22,7 +22,7 @@ Database__CommandTimeout: "30"
 SmtpSettings__Host: ""
 SmtpSettings__Port: "587"
 SmtpSettings__Username: ""
-SmtpSettings__Password: ""                         # Encrypted SMTP password
+SmtpSettings__Password: ""                         # Encrypted SMTP password. NEVER commit real values.
 SmtpSettings__FromEmail: ""
 SmtpSettings__UseSsl: "true"
 
